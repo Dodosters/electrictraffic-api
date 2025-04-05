@@ -404,5 +404,5 @@ async def upload_train_forecast(months_ahead: int, file: UploadFile = File(...))
         raise HTTPException(status_code=500, detail=f"Error processing request: {str(e)}")
 
 
-if __name__ == "__main__":
-    uvicorn.run("prediction_api:app", host="0.0.0.0", port=8000, reload=True)
+# if __name__ == "__main__":
+#     uvicorn.run("prediction_api:app", host="0.0.0.0", port=8000, reload=True)
