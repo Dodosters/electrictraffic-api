@@ -879,6 +879,81 @@ def transform_to_daily_chart_format(df: pd.DataFrame) -> Dict[str, List[Dict]]:
     
     return {"series": series}
 
+def transform_to_weekday_profile_format(df: pd.DataFrame) -> Dict[str, List[Dict]]:
+    """
+    Преобразует DataFrame в формат профилей нагрузки по дням недели
+    с агрегацией почасовых данных и определением выбросов
+    
+    Args:
+        df: Исходный DataFrame с почасовыми данными
+    
+    Returns:
+        Данные в формате для графика профилей нагрузки по дням недели с пометками выбросов
+    """
+    # Названия дней недели для отображения
+    weekday_names = ['Понедельник', 'Вторник', 'Среда', 'Четверг', 'Пятница', 'Суббота', 'Воскресенье']
+    
+    # Словарь для хранения данных по каждому дню недели
+    weekday_data = {day: [[] for _ in range(24)] for day in range(7)}
+    
+    # Обрабатываем каждую дату в DataFrame
+    for date, row in df.iterrows():
+        # Преобразуем индекс в datetime, если он еще не является таковым
+        if not isinstance(date, pd.Timestamp):
+            try:
+                date = pd.to_datetime(date)
+            except:
+                # Если не удалось преобразовать, пропускаем эту запись
+                continue
+        
+        # Получаем день недели (0 - понедельник, 6 - воскресенье)
+        weekday = date.weekday()
+        hourly_data = row['hourly_kwh']
+        
+        # Добавляем почасовые данные в соответствующие списки дня недели
+        for hour, value in enumerate(hourly_data):
+            weekday_data[weekday][hour].append(float(value))
+    
+    # Создаем серию результатов
+    series = []
+    
+    # Обрабатываем каждый день недели
+    for weekday in range(7):
+        points = []
+        
+        # Обрабатываем каждый час в дне недели
+        for hour in range(24):
+            hour_values = weekday_data[weekday][hour]
+            
+            # Если есть данные для этого часа в этот день недели
+            if hour_values:
+                # Вычисляем среднее значение
+                avg_value = sum(hour_values) / len(hour_values)
+                
+                # Определяем, является ли среднее значение выбросом
+                is_outlier_point = is_outlier(avg_value, pd.Series(hour_values))
+                
+                points.append({
+                    "hour": hour,
+                    "value": float(avg_value),  # Преобразуем в float для корректной сериализации
+                    "isOutlier": bool(is_outlier_point)
+                })
+            else:
+                # Если нет данных для этого часа, добавляем нулевое значение
+                points.append({
+                    "hour": hour,
+                    "value": 0.0,
+                    "isOutlier": False
+                })
+        
+        # Добавляем профиль дня недели в результаты
+        series.append({
+            "date": weekday_names[weekday],  # Используем название дня недели вместо даты
+            "points": points
+        })
+    
+    return {"series": series}
+
 
 @app.post("/chart-data")
 async def get_chart_data(file: UploadFile = File(...), view_type: Optional[str] = "hourly"):
@@ -907,6 +982,31 @@ async def get_chart_data(file: UploadFile = File(...), view_type: Optional[str] 
             chart_data = transform_to_hourly_chart_format(df)
             
         
+        return chart_data
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to process Excel file: {str(e)}")
+
+@app.post("/weekday-profile")
+async def get_weekday_profile(file: UploadFile = File(...)):
+    """
+    Маршрут для получения профилей нагрузки по дням недели из загруженного Excel файла
+    
+    Args:
+        file: Загруженный Excel файл
+    
+    Returns:
+        Данные в формате JSON для построения графика профилей нагрузки 
+        по дням недели с пометками выбросов
+    """
+    try:
+        file_content = await file.read()
+        
+        # Используем функцию analyse_excel для получения DataFrame
+        df = analyse_excel(file_content)
+        
+        # Преобразуем данные для профилей нагрузки по дням недели
+        chart_data = transform_to_weekday_profile_format(df)
+            
         return chart_data
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to process Excel file: {str(e)}")
