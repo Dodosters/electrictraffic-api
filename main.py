@@ -1,3 +1,4 @@
+
 from fastapi import FastAPI, HTTPException, UploadFile, File, Form, Depends
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
@@ -6,9 +7,8 @@ from pydantic import BaseModel
 import io
 import csv
 import asyncio
-
-from prediction_api import *
 import pandas as pd
+import json
 
 # Import mock data
 from mock_data import (
@@ -55,6 +55,81 @@ class CalculatePersonalRequest(BaseModel):
 class ProcessHourlyConsumptionRequest(BaseModel):
     csvData: str
     region: Optional[str] = "Ростов-на-Дону"
+
+class ProcessExcelRequest(BaseModel):
+    region: Optional[str] = "Ростов-на-Дону"
+
+# Excel processing function
+def process_excel_to_json(file_content: bytes):
+    """
+    Обрабатывает Excel-файл, преобразует данные в почасовой формат и возвращает JSON.
+
+    Args:
+        file_content (bytes): Содержимое файла (bytes).
+
+    Returns:
+        str: JSON-строка с данными о почасовом потреблении.
+              Возвращает None, если произошла ошибка.
+    """
+    try:
+        df = pd.read_excel(file_content)
+
+        # Преобразуем первый столбец в дату (некорректные значения станут NaT)
+        df[df.columns[0]] = pd.to_datetime(df.iloc[:, 0], errors='coerce')
+
+        # Удаляем строки, где в первом столбце нет даты
+        clean_df = df.dropna(subset=[df.columns[0]]).reset_index(drop=True)
+
+        # Удаляем строки, где дата "1970-01-01" (возникает при некорректном преобразовании)
+        clean_df = clean_df[clean_df[df.columns[0]].dt.year > 2000]
+
+        clean_df = clean_df.copy()
+
+        # Убедимся, что правильно указаны индексы столбцов
+        date_col = clean_df.columns[0]  # Столбец с датами
+        hour_col = clean_df.columns[2]  # Столбец с номером часа
+        kwh_col = clean_df.columns[4]   # Столбец с потреблением
+
+        # Создаем структурированные данные
+        clean_df['date'] = pd.to_datetime(clean_df[date_col]).dt.date
+        clean_df['hour'] = clean_df[hour_col].astype(int)
+        clean_df['kwh'] = pd.to_numeric(clean_df[kwh_col], errors='coerce').fillna(0)
+
+        # Проверяем наличие столбца 'date'
+        if 'date' not in clean_df.columns:
+            raise KeyError("Столбец 'date' не найден в DataFrame")
+
+        # Создаем каркас для всех часов
+        all_hours = pd.DataFrame({'hour': range(24)})
+
+        # Группируем и заполняем пропуски
+        result = (
+            clean_df.groupby('date', group_keys=False)
+            .apply(lambda grp: (
+                pd.merge(all_hours, grp[['hour', 'kwh']], on='hour', how='left')
+                .assign(date=grp.name)  # Добавляем дату обратно
+            ))
+            .fillna({'kwh': 0})
+            .groupby('date')['kwh']
+            .apply(list)
+            .to_dict()
+        )
+
+        # Конвертируем в JSON
+        json_output = json.dumps(
+            {str(k): [round(v, 2) for v in values] for k, values in result.items()},
+            indent=2,
+            ensure_ascii=False
+        )
+
+        return json_output
+
+    except FileNotFoundError:
+        raise HTTPException(status_code=400, detail="Файл не найден.")
+    except ValueError as ve:
+        raise HTTPException(status_code=400, detail=str(ve))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Произошла ошибка: {str(e)}")
 
 # API routes
 @app.get("/business-tariffs")
@@ -549,6 +624,27 @@ async def process_hourly_consumption_string(params: ProcessHourlyConsumptionRequ
             "error": f"Ошибка обработки данных: {str(e)}"
         }
 
+@app.post("/process-excel")
+async def process_excel(file: UploadFile = File(...)):
+    """
+    API endpoint для обработки Excel-файла, отправленного в теле запроса.
+
+    Returns:
+        JSON: JSON-строка с данными о почасовом потреблении, либо сообщение об ошибке.
+    """
+    await delay(800)
+
+    if not file:
+        raise HTTPException(status_code=400, detail="Нет файла в запросе")
+
+    try:
+        contents = await file.read()
+        json_data = process_excel_to_json(contents)
+        return JSONResponse(content=json.loads(json_data), media_type="application/json") #Convert json_data (string) to dict (JSON)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Ошибка при обработке файла: {str(e)}")
+
+
 @app.get("/faqs")
 async def get_faqs():
     await delay(400)
@@ -566,64 +662,6 @@ async def get_news_by_id(id: int):
     if news:
         return {"success": True, "data": news}
     return {"success": False, "error": "News article not found"}
-
-
-# Предсказание
-@app.post("/forecast/", response_model=ForecastResponse)
-async def upload_train_forecast(months_ahead: int, file: UploadFile = File(...)):
-    """Upload data, train model, and generate forecast in one request"""
-    if not file.filename.endswith('.csv'):
-        raise HTTPException(status_code=400, detail="Only CSV files are supported")
-    
-    if months_ahead < 1 or months_ahead > 24:
-        raise HTTPException(status_code=400, detail="months_ahead must be between 1 and 24")
-    
-    try:
-        # Read CSV content
-        contents = await file.read()
-        buffer = io.StringIO(contents.decode('utf-8'))
-        df = pd.read_csv(buffer)
-        
-        # Check required columns
-        required_cols = ['year', 'month', 'volume']
-        if not all(col in df.columns for col in required_cols):
-            raise HTTPException(
-                status_code=400,
-                detail=f"CSV must contain the following columns: {', '.join(required_cols)}"
-            )
-        
-        # Check if data is valid for forecasting
-        if len(df) < 3:
-            raise HTTPException(
-                status_code=400, 
-                detail="Data must contain at least 3 data points for forecasting"
-            )
-        
-        # Prepare the data
-        df_prepared = load_and_prepare_data(df)
-        
-        # Train the model
-        models, feature_names = train_ensemble_model(df_prepared)
-        
-        # Generate forecast
-        forecast_results, future_df = forecast_recursive(
-            models, 
-            feature_names, 
-            df_prepared, 
-            months_ahead
-        )
-        
-        # Prepare response
-        response = {
-            "forecast": forecast_results
-        }
-        
-        return response
-    
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Error processing request: {str(e)}")
-
-
 
 if __name__ == "__main__":
     import uvicorn
