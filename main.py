@@ -7,6 +7,9 @@ import io
 import csv
 import asyncio
 
+from prediction_api import *
+import pandas as pd
+
 # Import mock data
 from mock_data import (
     business_tariffs,
@@ -563,6 +566,64 @@ async def get_news_by_id(id: int):
     if news:
         return {"success": True, "data": news}
     return {"success": False, "error": "News article not found"}
+
+
+# Предсказание
+@app.post("/forecast/", response_model=ForecastResponse)
+async def upload_train_forecast(months_ahead: int, file: UploadFile = File(...)):
+    """Upload data, train model, and generate forecast in one request"""
+    if not file.filename.endswith('.csv'):
+        raise HTTPException(status_code=400, detail="Only CSV files are supported")
+    
+    if months_ahead < 1 or months_ahead > 24:
+        raise HTTPException(status_code=400, detail="months_ahead must be between 1 and 24")
+    
+    try:
+        # Read CSV content
+        contents = await file.read()
+        buffer = io.StringIO(contents.decode('utf-8'))
+        df = pd.read_csv(buffer)
+        
+        # Check required columns
+        required_cols = ['year', 'month', 'volume']
+        if not all(col in df.columns for col in required_cols):
+            raise HTTPException(
+                status_code=400,
+                detail=f"CSV must contain the following columns: {', '.join(required_cols)}"
+            )
+        
+        # Check if data is valid for forecasting
+        if len(df) < 3:
+            raise HTTPException(
+                status_code=400, 
+                detail="Data must contain at least 3 data points for forecasting"
+            )
+        
+        # Prepare the data
+        df_prepared = load_and_prepare_data(df)
+        
+        # Train the model
+        models, feature_names = train_ensemble_model(df_prepared)
+        
+        # Generate forecast
+        forecast_results, future_df = forecast_recursive(
+            models, 
+            feature_names, 
+            df_prepared, 
+            months_ahead
+        )
+        
+        # Prepare response
+        response = {
+            "forecast": forecast_results
+        }
+        
+        return response
+    
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error processing request: {str(e)}")
+
+
 
 if __name__ == "__main__":
     import uvicorn
