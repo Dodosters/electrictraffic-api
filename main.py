@@ -12,6 +12,7 @@ import pandas as pd
 import json
 from pathlib import Path
 
+
 # Import mock data
 from mock_data import (
     business_tariffs,
@@ -21,6 +22,8 @@ from mock_data import (
     faq_data,
     news_data
 )
+
+from prediction_api import *
 
 app = FastAPI(
     title="ETariff API",
@@ -162,26 +165,29 @@ def analyse_excel(file_content):
     if 'date' not in clean_df.columns:
         raise KeyError("Столбец 'date' не найден в DataFrame")
 
-    # Создаем каркас для всех часов
+
+            # Создаем каркас для всех часов
     all_hours = pd.DataFrame({'hour': range(24)})
-    
+
     # Группируем и заполняем пропуски
-    result = (
+    hourly_series = (
         clean_df.groupby('date', group_keys=False)
         .apply(lambda grp: (
             pd.merge(all_hours, grp[['hour', 'kwh']], on='hour', how='left')
-            .assign(date=grp.name)  # Добавляем дату обратно
+            .assign(date=grp.name) # Добавляем дату обратно
         ))
         .fillna({'kwh': 0})
         .groupby('date')['kwh']
         .apply(list)
-        .to_dict()
     )
+    
+    # Преобразуем Series в DataFrame
+    result_df = pd.DataFrame({'hourly_kwh': hourly_series})
 
-    return result
+    return result_df
 
 # Excel processing function
-def process_excel_to_json(file_content: bytes):
+def excel_to_json(file_content: bytes):
     """
     Обрабатывает Excel-файл, преобразует данные в почасовой формат и возвращает JSON.
 
@@ -193,56 +199,34 @@ def process_excel_to_json(file_content: bytes):
               Возвращает None, если произошла ошибка.
     """
     try:
-        df = pd.read_excel(file_content)
-
-        # Преобразуем первый столбец в дату (некорректные значения станут NaT)
-        df[df.columns[0]] = pd.to_datetime(df.iloc[:, 0], errors='coerce')
-
-        # Удаляем строки, где в первом столбце нет даты
-        clean_df = df.dropna(subset=[df.columns[0]]).reset_index(drop=True)
-
-        # Удаляем строки, где дата "1970-01-01" (возникает при некорректном преобразовании)
-        clean_df = clean_df[clean_df[df.columns[0]].dt.year > 2000]
-
-        clean_df = clean_df.copy()
-
-        # Убедимся, что правильно указаны индексы столбцов
-        date_col = clean_df.columns[0]  # Столбец с датами
-        hour_col = clean_df.columns[2]  # Столбец с номером часа
-        kwh_col = clean_df.columns[4]   # Столбец с потреблением
-
-        # Создаем структурированные данные
-        clean_df['date'] = pd.to_datetime(clean_df[date_col]).dt.date
-        clean_df['hour'] = clean_df[hour_col].astype(int)
-        clean_df['kwh'] = pd.to_numeric(clean_df[kwh_col], errors='coerce').fillna(0)
-
-        # Проверяем наличие столбца 'date'
-        if 'date' not in clean_df.columns:
-            raise KeyError("Столбец 'date' не найден в DataFrame")
-
-        # Создаем каркас для всех часов
-        all_hours = pd.DataFrame({'hour': range(24)})
-
-        # Группируем и заполняем пропуски
-        result = (
-            clean_df.groupby('date', group_keys=False)
-            .apply(lambda grp: (
-                pd.merge(all_hours, grp[['hour', 'kwh']], on='hour', how='left')
-                .assign(date=grp.name)  # Добавляем дату обратно
-            ))
-            .fillna({'kwh': 0})
-            .groupby('date')['kwh']
-            .apply(list)
-            .to_dict()
-        )
-
+        
+        result = analyse_excel(file_content)
+        # all_hours = pd.DataFrame({'hour': range(24)})
+        # result = (
+        #     clean_df.groupby('date', group_keys=False)
+        #     .apply(lambda grp: (
+        #         pd.merge(all_hours, grp[['hour', 'kwh']], on='hour', how='left')
+        #         .assign(date=grp.name)  # Добавляем дату обратно
+        #     ))
+        #     .fillna({'kwh': 0})
+        #     .groupby('date')['kwh']
+        #     .apply(list)
+        #     .to_dict()
+        # )
         # Конвертируем в JSON
+
+        print(result.head())
+
+        result_dict = {str(idx): [round(float(v), 2) for v in row] 
+                     for idx, row in result['hourly_kwh'].items()}
+        
         json_output = json.dumps(
-            {str(k): [round(v, 2) for v in values] for k, values in result.items()},
+            result_dict,
             indent=2,
             ensure_ascii=False
         )
 
+        print('wwwwwwwwwwwwwwwwwww')
         return json_output
 
     except FileNotFoundError:
@@ -681,7 +665,8 @@ async def process_excel(file: UploadFile = File(...)):
 
     try:
         contents = await file.read()
-        json_data = process_excel_to_json(contents)
+        json_data = excel_to_json(contents)
+        
         return JSONResponse(content=json.loads(json_data), media_type="application/json") #Convert json_data (string) to dict (JSON)
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Ошибка при обработке файла: {str(e)}")
@@ -704,6 +689,304 @@ async def get_news_by_id(id: int):
     if news:
         return {"success": True, "data": news}
     return {"success": False, "error": "News article not found"}
+
+# Предсказание
+@app.post("/forecast/", response_model=ForecastResponse)
+async def upload_train_forecast(months_ahead: int, file: UploadFile = File(...)):
+    """Upload data, train model, and generate forecast in one request"""
+    if not file.filename.endswith('.csv'):
+        raise HTTPException(status_code=400, detail="Only CSV files are supported")
+    
+    if months_ahead < 1 or months_ahead > 24:
+        raise HTTPException(status_code=400, detail="months_ahead must be between 1 and 24")
+    
+    try:
+        # Read CSV content
+        contents = await file.read()
+        buffer = io.StringIO(contents.decode('utf-8'))
+        df = pd.read_csv(buffer)
+        
+        # Check required columns
+        required_cols = ['year', 'month', 'volume']
+        if not all(col in df.columns for col in required_cols):
+            raise HTTPException(
+                status_code=400,
+                detail=f"CSV must contain the following columns: {', '.join(required_cols)}"
+            )
+        
+        # Check if data is valid for forecasting
+        if len(df) < 3:
+            raise HTTPException(
+                status_code=400, 
+                detail="Data must contain at least 3 data points for forecasting"
+            )
+        
+        # Prepare the data
+        df_prepared = load_and_prepare_data(df)
+        
+        # Train the model
+        models, feature_names = train_ensemble_model(df_prepared)
+        
+        # Generate forecast
+        forecast_results, future_df = forecast_recursive(
+            models, 
+            feature_names, 
+            df_prepared, 
+            months_ahead
+        )
+        
+        # Prepare response
+        response = {
+            "forecast": forecast_results
+        }
+        
+        return response
+    
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error processing request: {str(e)}")
+
+
+
+
+
+def is_outlier(value: float, series: pd.Series, factor: float = 1.5) -> bool:
+    """
+    Определяет, является ли значение выбросом на основе метода межквартильного размаха (IQR)
+    
+    Args:
+        value: Проверяемое значение
+        series: Серия данных для вычисления статистики
+        factor: Множитель для диапазона IQR (обычно 1.5)
+        
+    Returns:
+        True, если значение является выбросом
+    """
+    # Удаляем NaN значения
+    series = series.dropna()
+    
+    # Находим квартили
+    q1 = series.quantile(0.25)
+    q3 = series.quantile(0.75)
+    
+    # Вычисляем межквартильный размах
+    iqr = q3 - q1
+    
+    # Определяем границы выбросов
+    lower_bound = q1 - factor * iqr
+    upper_bound = q3 + factor * iqr
+    
+    # Проверяем, выходит ли значение за границы
+    return value < lower_bound or value > upper_bound
+
+def transform_to_hourly_chart_format(df: pd.DataFrame) -> Dict[str, List[Dict]]:
+    """
+    Преобразует DataFrame в формат почасового графика с определением выбросов
+    
+    Args:
+        df: Исходный DataFrame с почасовыми данными
+    
+    Returns:
+        Данные в формате для графика с пометками выбросов
+    """
+    # Определяем столбец с датами и часовые столбцы
+    # Предполагаем, что первый столбец - это дата или идентификатор
+    series = []
+    
+    # Предполагаем, что df имеет индекс с датами и столбец 'hourly_kwh' со списками значений
+    for date, row in df.iterrows():
+        date_label = str(date)
+        hourly_data = row['hourly_kwh']
+        
+        # Создаем временный DataFrame для определения выбросов
+        temp_df = pd.DataFrame({'hour': range(24), 'value': hourly_data})
+        
+        points = []
+        for hour, value in enumerate(hourly_data):
+            # Определяем, является ли точка выбросом
+            is_outlier_point = is_outlier(value, pd.Series(hourly_data))
+            
+            points.append({
+                "hour": hour,
+                "value": float(value),  # Преобразуем в float для корректной сериализации
+                "isOutlier": bool(is_outlier_point)
+            })
+        
+        series.append({
+            "date": date_label,
+            "points": points
+        })
+    
+    return {"series": series}
+
+def transform_to_daily_chart_format(df: pd.DataFrame) -> Dict[str, List[Dict]]:
+    """
+    Преобразует DataFrame в формат для графика по дням
+    с суммированием почасовых данных в рамках дня и определением выбросов
+    
+    Args:
+        df: Исходный DataFrame с почасовыми данными
+    
+    Returns:
+        Данные в формате для графика по дням с пометками выбросов
+    """
+    series = []
+    
+    # Создаем новый массив для хранения суммарных значений по дням
+    daily_values = []
+    daily_labels = []
+    
+    # Для каждой даты в DataFrame суммируем все часовые значения
+    for date, row in df.iterrows():
+        date_label = str(date)
+        hourly_data = row['hourly_kwh']
+        
+        # Суммируем все почасовые значения для данного дня
+        daily_sum = sum(hourly_data)
+        
+        # Сохраняем результат
+        daily_values.append(daily_sum)
+        daily_labels.append(date_label)
+    
+    # Преобразуем в Series для определения выбросов
+    daily_series = pd.Series(daily_values)
+    
+    # Добавляем точки для каждого дня в формате графика
+    points = []
+    for i, (day_label, value) in enumerate(zip(daily_labels, daily_values)):
+        # Определяем, является ли значение выбросом
+        is_outlier_point = is_outlier(value, daily_series)
+        
+        points.append({
+            "day": i,  # Индекс дня или можно использовать день месяца
+            "date": day_label,  # Сохраняем метку даты
+            "value": float(value),  # Преобразуем в float для корректной сериализации
+            "isOutlier": bool(is_outlier_point)
+        })
+    
+    # Группируем все точки в один набор данных
+    series.append({
+        "points": points
+    })
+    
+    return {"series": series}
+
+def transform_to_weekday_profile_format(df: pd.DataFrame) -> Dict[str, List[Dict]]:
+    """
+    Преобразует DataFrame в формат профилей нагрузки по дням недели
+    с агрегацией почасовых данных и определением выбросов
+    
+    Args:
+        df: Исходный DataFrame с почасовыми данными
+    
+    Returns:
+        Данные в формате для графика профилей нагрузки по дням недели с пометками выбросов
+    """
+    # Названия дней недели для отображения
+    weekday_names = ['Понедельник', 'Вторник', 'Среда', 'Четверг', 'Пятница', 'Суббота', 'Воскресенье']
+    
+    # Словарь для хранения данных по каждому дню недели
+    weekday_data = {day: [[] for _ in range(24)] for day in range(7)}
+    
+    # Обрабатываем каждую дату в DataFrame
+    for date, row in df.iterrows():
+        # Преобразуем индекс в datetime, если он еще не является таковым
+        if not isinstance(date, pd.Timestamp):
+            try:
+                date = pd.to_datetime(date)
+            except:
+                # Если не удалось преобразовать, пропускаем эту запись
+                continue
+        
+        # Получаем день недели (0 - понедельник, 6 - воскресенье)
+        weekday = date.weekday()
+        hourly_data = row['hourly_kwh']
+        
+        # Добавляем почасовые данные в соответствующие списки дня недели
+        for hour, value in enumerate(hourly_data):
+            weekday_data[weekday][hour].append(float(value))
+    
+    # Создаем серию результатов
+    series = []
+    
+    # Обрабатываем каждый день недели
+    for weekday in range(7):        
+        # Обрабатываем каждый час в дне недели
+        day_value = 0
+        for hour in range(24):
+            hour_values = weekday_data[weekday][hour]
+            
+            # Если есть данные для этого часа в этот день недели
+            if hour_values:
+                # Вычисляем среднее значение
+                avg_value = sum(hour_values) / len(hour_values)
+                
+                # Определяем, является ли среднее значение выбросом                
+                day_value += avg_value
+        
+        # Добавляем профиль дня недели в результаты
+        series.append({
+            "date": weekday_names[weekday],  # Используем название дня недели вместо даты
+            "day_value": day_value
+        })
+    
+    return {"series": series}
+
+
+@app.post("/chart-data")
+async def get_chart_data(file: UploadFile = File(...), view_type: Optional[str] = "hourly"):
+    """
+    Маршрут для получения данных графика из загруженного Excel файла
+
+    Args:
+        file: Загруженный Excel файл
+        view_type: Тип представления данных. Возможные значения: "hourly" (почасовое), "daily" (по дням)
+
+    Returns:
+        Данные в формате JSON для построения графика с пометками выбросов
+    """
+    try:
+        file_content = await file.read()
+        
+        # Используем функцию analyse_excel для получения DataFrame
+        df = analyse_excel(file_content)
+
+        # В зависимости от типа представления, возвращаем разные данные
+        if view_type.lower() == "daily":
+            # Данные агрегированы по дням
+            chart_data = transform_to_daily_chart_format(df)
+        else:
+            # Почасовые данные (по умолчанию)
+            chart_data = transform_to_hourly_chart_format(df)
+            
+        
+        return chart_data
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to process Excel file: {str(e)}")
+
+@app.post("/weekday-profile")
+async def get_weekday_profile(file: UploadFile = File(...)):
+    """
+    Маршрут для получения профилей нагрузки по дням недели из загруженного Excel файла
+    
+    Args:
+        file: Загруженный Excel файл
+    
+    Returns:
+        Данные в формате JSON для построения графика профилей нагрузки 
+        по дням недели с пометками выбросов
+    """
+    try:
+        file_content = await file.read()
+        
+        # Используем функцию analyse_excel для получения DataFrame
+        df = analyse_excel(file_content)
+        
+        # Преобразуем данные для профилей нагрузки по дням недели
+        chart_data = transform_to_weekday_profile_format(df)
+            
+        return chart_data
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to process Excel file: {str(e)}")
 
 if __name__ == "__main__":
     import uvicorn
