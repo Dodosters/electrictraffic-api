@@ -47,6 +47,7 @@ async def delay(ms: int):
 class CalculateBusinessRequest(BaseModel):
     region: str
     consumption: float
+    power_tarif: str
 
 class ProcessHourlyConsumptionRequest(BaseModel):
     csvData: str
@@ -80,39 +81,10 @@ def save_coefficients(coeffs: AllCoefficients):
     with open(coefficients_file, "w") as f: 
         json.dump(coeffs.dict(), f, indent=4, ensure_ascii=False)
 
-def load_coefficients() -> AllCoefficients:
-    if not coefficients_file.exists():
-        # Создаем дефолтные коэффициенты
-        default_coeffs = AllCoefficients(
-            first_category_cost=CategoryCoefficients(
-                before_670=CoefficientRange(
-                    price_mean=0.325,
-                    another_service=0.563,
-                    sales_for_control=0.314,
-                    sales=0.325,
-                    power_tarif=PowerTariff(VN=3.2, SN1=3.5, SN2=3.7, NN=4.6)
-                ),
-                from_670_to_10=CoefficientRange(
-                    price_mean=0.400,
-                    another_service=0.600,
-                    sales_for_control=0.350,
-                    sales=0.400,
-                    power_tarif=PowerTariff(VN=3.2, SN1=3.5, SN2=3.7, NN=4.6)
-                ),
-                from_10=CoefficientRange(
-                    price_mean=0.400,
-                    another_service=0.600,
-                    sales_for_control=0.350,
-                    sales=0.400,
-                    power_tarif=PowerTariff(VN=3.2, SN1=3.5, SN2=3.7, NN=4.6)
-                )
-            )
-        )
-        save_coefficients(default_coeffs)
-    
+def load_coefficients() -> dict:
     with open(coefficients_file, "r") as f:  
         data = json.load(f)
-    return AllCoefficients(**data)
+    return data
 
 @app.get("/coefficients", response_model=AllCoefficients)
 async def get_all_coefficients():
@@ -297,16 +269,25 @@ async def get_analytics_data():
 async def calculate_business_electricity_cost(params: CalculateBusinessRequest):
     await delay(600)
     region = params.region
-    consumption = params.consumption
+    consumption_real = params.consumption
+    power_tarif = params.power_tarif
     coefficients = load_coefficients()
+    print(coefficients)
+    print(type(coefficients))
 
-    def category_one(region, consumtion, coefficients):
+    consumption = "before_670" if consumption_real < 670 else "before_670_to_10" if consumption_real < 1000 else "from_10"
+
+
+    def category_one(region, consumption, coefficients):
         region_tariff = next((t for t in business_tariffs if t["region"] == region), None)
         if not region_tariff:
             return {"success": False, "error": "Region not found"}
-        
-        result_coeff = coefficients.price_mean+coefficients.another_service+coefficients.sales_for_control+coefficients.sales
-        cost = consumption*result_coeff
+        print(dir(coefficients))
+        category = "first_category_cost"
+        result_coeff = coefficients[category][consumption]["price_mean"]+coefficients[category][consumption]["another_service"]+coefficients[category][consumption]["sales_for_control"]+coefficients[category][consumption]["sales"]+coefficients[category][consumption]["power_tarif"][power_tarif]
+        print(result_coeff)
+        print(consumption)
+        cost = consumption_real*result_coeff
         return cost
     
     return {
