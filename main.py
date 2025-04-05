@@ -918,10 +918,9 @@ def transform_to_weekday_profile_format(df: pd.DataFrame) -> Dict[str, List[Dict
     series = []
     
     # Обрабатываем каждый день недели
-    for weekday in range(7):
-        points = []
-        
+    for weekday in range(7):        
         # Обрабатываем каждый час в дне недели
+        day_value = 0
         for hour in range(24):
             hour_values = weekday_data[weekday][hour]
             
@@ -930,26 +929,13 @@ def transform_to_weekday_profile_format(df: pd.DataFrame) -> Dict[str, List[Dict
                 # Вычисляем среднее значение
                 avg_value = sum(hour_values) / len(hour_values)
                 
-                # Определяем, является ли среднее значение выбросом
-                is_outlier_point = is_outlier(avg_value, pd.Series(hour_values))
-                
-                points.append({
-                    "hour": hour,
-                    "value": float(avg_value),  # Преобразуем в float для корректной сериализации
-                    "isOutlier": bool(is_outlier_point)
-                })
-            else:
-                # Если нет данных для этого часа, добавляем нулевое значение
-                points.append({
-                    "hour": hour,
-                    "value": 0.0,
-                    "isOutlier": False
-                })
+                # Определяем, является ли среднее значение выбросом                
+                day_value += avg_value
         
         # Добавляем профиль дня недели в результаты
         series.append({
             "date": weekday_names[weekday],  # Используем название дня недели вместо даты
-            "points": points
+            "day_value": day_value
         })
     
     return {"series": series}
