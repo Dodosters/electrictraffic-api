@@ -1,0 +1,40 @@
+{
+    "first_category_cost": {
+        "before_670": {
+            "price_mean": 0.325,
+            "another_service": 0.0,
+            "sales_for_control": 0.0,
+            "sales": 0.0,
+            "power_tarif": {
+                "VN": 0.0,
+                "SN1": 0.0,
+                "SN2": 0.0,
+                "NN": 0.0
+            }
+        },
+        "from_670_to_10": {
+            "price_mean": 0.0,
+            "another_service": 0.325,
+            "sales_for_control": 0.0,
+            "sales": 0.0,
+            "power_tarif": {
+                "VN": 0.0,
+                "SN1": 0.0,
+                "SN2": 0.0,
+                "NN": 0.0
+            }
+        },
+        "from_10": {
+            "price_mean": 0.0,
+            "another_service": 0.0,
+            "sales_for_control": 0.0,
+            "sales": 0.0,
+            "power_tarif": {
+                "VN": 0.0,
+                "SN1": 0.0,
+                "SN2": 0.0,
+                "NN": 0.0
+            }
+        }
+    }
+}
