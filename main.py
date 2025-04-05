@@ -6,9 +6,11 @@ from typing import Dict, List, Optional, Any
 from pydantic import BaseModel
 import io
 import csv
+import json
 import asyncio
 import pandas as pd
 import json
+from pathlib import Path
 
 # Import mock data
 from mock_data import (
@@ -26,6 +28,8 @@ app = FastAPI(
     version="1.0.0"
 )
 
+coefficients_file = Path("coefficients.json")
+
 # Add CORS middleware
 app.add_middleware(
     CORSMiddleware,
@@ -42,15 +46,7 @@ async def delay(ms: int):
 # Define Pydantic models for request/response validation
 class CalculateBusinessRequest(BaseModel):
     region: str
-    tariffType: str
     consumption: float
-    period: str
-
-class CalculatePersonalRequest(BaseModel):
-    region: str
-    tariffType: str
-    consumption: float
-    period: str
 
 class ProcessHourlyConsumptionRequest(BaseModel):
     csvData: str
@@ -58,6 +54,131 @@ class ProcessHourlyConsumptionRequest(BaseModel):
 
 class ProcessExcelRequest(BaseModel):
     region: Optional[str] = "Ростов-на-Дону"
+
+class PowerTariff(BaseModel):
+    VN: float
+    SN1: float
+    SN2: float
+    NN: float
+
+class CoefficientRange(BaseModel):
+    price_mean: float
+    another_service: float
+    sales_for_control: float
+    sales: float
+    power_tarif: PowerTariff
+
+class CategoryCoefficients(BaseModel):
+    before_670: CoefficientRange
+    from_670_to_10: CoefficientRange
+    from_10: CoefficientRange
+
+class AllCoefficients(BaseModel):
+    first_category_cost: CategoryCoefficients
+
+def save_coefficients(coeffs: AllCoefficients):
+    with open(coefficients_file, "w") as f: 
+        json.dump(coeffs.dict(), f, indent=4, ensure_ascii=False)
+
+def load_coefficients() -> AllCoefficients:
+    if not coefficients_file.exists():
+        # Создаем дефолтные коэффициенты
+        default_coeffs = AllCoefficients(
+            first_category_cost=CategoryCoefficients(
+                before_670=CoefficientRange(
+                    price_mean=0.325,
+                    another_service=0.563,
+                    sales_for_control=0.314,
+                    sales=0.325,
+                    power_tarif=PowerTariff(VN=3.2, SN1=3.5, SN2=3.7, NN=4.6)
+                ),
+                from_670_to_10=CoefficientRange(
+                    price_mean=0.400,
+                    another_service=0.600,
+                    sales_for_control=0.350,
+                    sales=0.400,
+                    power_tarif=PowerTariff(VN=3.2, SN1=3.5, SN2=3.7, NN=4.6)
+                ),
+                from_10=CoefficientRange(
+                    price_mean=0.400,
+                    another_service=0.600,
+                    sales_for_control=0.350,
+                    sales=0.400,
+                    power_tarif=PowerTariff(VN=3.2, SN1=3.5, SN2=3.7, NN=4.6)
+                )
+            )
+        )
+        save_coefficients(default_coeffs)
+    
+    with open(coefficients_file, "r") as f:  
+        data = json.load(f)
+    return AllCoefficients(**data)
+
+@app.get("/coefficients", response_model=AllCoefficients)
+async def get_all_coefficients():
+    return load_coefficients()
+
+@app.put("/coefficients/first_category")
+async def update_first_category(new_coefficients: CategoryCoefficients):
+    all_coeffs = load_coefficients()
+    all_coeffs.first_category_cost = new_coefficients
+    save_coefficients(all_coeffs)
+    return {"message": "Коэффициенты первой категории обновлены"}
+
+@app.get("/coefficients/first_category/{range_name}", response_model=CoefficientRange)
+async def get_specific_range(range_name: str):
+    coeffs = load_coefficients()
+    return getattr(coeffs.first_category_cost, range_name)
+
+def analyse_excel(file_content):
+    
+    df = pd.read_excel(file_content)
+
+    # Преобразуем первый столбец в дату (некорректные значения станут NaT)
+    df[df.columns[0]] = pd.to_datetime(df.iloc[:, 0], errors='coerce')
+
+    # Удаляем строки, где в первом столбце нет даты
+    clean_df = df.dropna(subset=[df.columns[0]]).reset_index(drop=True)
+
+    # Удаляем строки, где дата "1970-01-01" (возникает при некорректном преобразовании)
+    clean_df = clean_df[clean_df[df.columns[0]].dt.year > 2000]
+
+    clean_df = clean_df.copy()
+
+    # Убедимся, что правильно указаны индексы столбцов
+    date_col = clean_df.columns[0]  # Столбец с датами
+    hour_col = clean_df.columns[2]  # Столбец с номером часа
+    kwh_col = clean_df.columns[4]   # Столбец с потреблением
+
+    # Создаем структурированные данные
+    clean_df['date'] = pd.to_datetime(clean_df[date_col]).dt.date
+    clean_df['hour'] = clean_df[hour_col].astype(int)
+    # clean_df['kwh'] = .fillna(0)
+    # print('eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee')
+    clean_df['kwh'] = pd.to_numeric(clean_df[kwh_col], errors='coerce').interpolate(method='linear').fillna(method='bfill').fillna(method='ffill')
+    
+
+    # Проверяем наличие столбца 'date'
+    if 'date' not in clean_df.columns:
+        raise KeyError("Столбец 'date' не найден в DataFrame")
+
+    # Создаем каркас для всех часов
+    all_hours = pd.DataFrame({'hour': range(24)})
+    
+    # Группируем и заполняем пропуски
+    result = (
+        clean_df.groupby('date', group_keys=False)
+        .apply(lambda grp: (
+            pd.merge(all_hours, grp[['hour', 'kwh']], on='hour', how='left')
+            .assign(date=grp.name)  # Добавляем дату обратно
+        ))
+        .fillna({'kwh': 0})
+        .groupby('date')['kwh']
+        .apply(list)
+        .to_dict()
+    )
+
+    return result
 
 # Excel processing function
 def process_excel_to_json(file_content: bytes):
@@ -176,107 +297,28 @@ async def get_analytics_data():
 async def calculate_business_electricity_cost(params: CalculateBusinessRequest):
     await delay(600)
     region = params.region
-    tariff_type = params.tariffType
     consumption = params.consumption
-    period = params.period
-    
-    # Find the region's tariff data
-    region_tariff = next((t for t in business_tariffs if t["region"] == region), None)
-    if not region_tariff:
-        return {"success": False, "error": "Region not found"}
-    
-    # Find the specific tariff type
-    tariff = next((t for t in region_tariff["tariffTypes"] if t["name"] == tariff_type), None)
-    if not tariff:
-        return {"success": False, "error": "Tariff type not found"}
-    
-    # Calculate cost based on tariff type
-    cost = 0
-    if tariff["name"] == "Одноставочный":
-        cost = consumption * tariff["rate"]
-    elif tariff["name"] == "Двухставочный":
-        day_consumption = consumption * 0.7  # Assuming 70% consumption during day
-        night_consumption = consumption * 0.3  # Assuming 30% consumption during night
+    coefficients = load_coefficients()
+
+    def category_one(region, consumtion, coefficients):
+        region_tariff = next((t for t in business_tariffs if t["region"] == region), None)
+        if not region_tariff:
+            return {"success": False, "error": "Region not found"}
         
-        day_rate = next((r["rate"] for r in tariff["rates"] if r["name"] == "День"), 0)
-        night_rate = next((r["rate"] for r in tariff["rates"] if r["name"] == "Ночь"), 0)
-        
-        cost = (day_consumption * day_rate) + (night_consumption * night_rate)
-    elif tariff["name"] == "Трехставочный":
-        peak_consumption = consumption * 0.2  # Assuming 20% consumption during peak
-        semi_peak_consumption = consumption * 0.5  # Assuming 50% consumption during semi-peak
-        night_consumption = consumption * 0.3  # Assuming 30% consumption during night
-        
-        peak_rate = next((r["rate"] for r in tariff["rates"] if r["name"] == "Пик"), 0)
-        semi_peak_rate = next((r["rate"] for r in tariff["rates"] if r["name"] == "Полупик"), 0)
-        night_rate = next((r["rate"] for r in tariff["rates"] if r["name"] == "Ночь"), 0)
-        
-        cost = (peak_consumption * peak_rate) + (semi_peak_consumption * semi_peak_rate) + (night_consumption * night_rate)
+        result_coeff = coefficients.price_mean+coefficients.another_service+coefficients.sales_for_control+coefficients.sales
+        cost = consumption*result_coeff
+        return cost
     
     return {
         "success": True,
         "data": {
             "region": region,
-            "tariffType": tariff_type,
             "consumption": consumption,
-            "period": period,
-            "cost": round(cost * 100) / 100,
+            "cost": round(category_one(region, consumption, coefficients) * 100) / 100,
             "currency": "руб."
         }
     }
 
-@app.post("/calculate/personal")
-async def calculate_personal_electricity_cost(params: CalculatePersonalRequest):
-    await delay(600)
-    region = params.region
-    tariff_type = params.tariffType
-    consumption = params.consumption
-    period = params.period
-    
-    # Find the region's tariff data
-    region_tariff = next((t for t in personal_tariffs if t["region"] == region), None)
-    if not region_tariff:
-        return {"success": False, "error": "Region not found"}
-    
-    # Find the specific tariff type
-    tariff = next((t for t in region_tariff["tariffTypes"] if t["name"] == tariff_type), None)
-    if not tariff:
-        return {"success": False, "error": "Tariff type not found"}
-    
-    # Calculate cost based on tariff type
-    cost = 0
-    if tariff["name"] == "Одноставочный":
-        cost = consumption * tariff["rate"]
-    elif tariff["name"] == "Двухзонный":
-        day_consumption = consumption * 0.7  # Assuming 70% consumption during day
-        night_consumption = consumption * 0.3  # Assuming 30% consumption during night
-        
-        day_rate = next((r["rate"] for r in tariff["rates"] if r["name"] == "День"), 0)
-        night_rate = next((r["rate"] for r in tariff["rates"] if r["name"] == "Ночь"), 0)
-        
-        cost = (day_consumption * day_rate) + (night_consumption * night_rate)
-    elif tariff["name"] == "Трехзонный":
-        peak_consumption = consumption * 0.2  # Assuming 20% consumption during peak
-        semi_peak_consumption = consumption * 0.5  # Assuming 50% consumption during semi-peak
-        night_consumption = consumption * 0.3  # Assuming 30% consumption during night
-        
-        peak_rate = next((r["rate"] for r in tariff["rates"] if r["name"] == "Пик"), 0)
-        semi_peak_rate = next((r["rate"] for r in tariff["rates"] if r["name"] == "Полупик"), 0)
-        night_rate = next((r["rate"] for r in tariff["rates"] if r["name"] == "Ночь"), 0)
-        
-        cost = (peak_consumption * peak_rate) + (semi_peak_consumption * semi_peak_rate) + (night_consumption * night_rate)
-    
-    return {
-        "success": True,
-        "data": {
-            "region": region,
-            "tariffType": tariff_type,
-            "consumption": consumption,
-            "period": period,
-            "cost": round(cost * 100) / 100,
-            "currency": "руб."
-        }
-    }
 
 @app.post("/process-hourly-consumption")
 async def process_hourly_consumption(file: UploadFile = File(...), region: str = Form("Ростов-на-Дону")):
