@@ -284,14 +284,12 @@ async def calculate_business_electricity_cost(params: CalculateBusinessRequest):
         result_coeff = coefficients[category][consumption]["price_mean"]+coefficients[category][consumption]["another_service"]+coefficients[category][consumption]["sales_for_control"]+coefficients[category][consumption]["sales"]+coefficients[category][consumption]["power_tarif"][power_tarif]
         cost = consumption_real*result_coeff
         return cost
-    def category_two(region, consumption, coefficients):
+    def category_two(region, coefficients, night_consumption, day_consumption):
         region_tariff = next((t for t in business_tariffs if t["region"] == region), None)
         if not region_tariff:
             return {"success": False, "error": "Region not found"}
         category = "second_category_cost"
-        night_consumption = 3784
         night_coeff = coefficients[category][consumption]["night_cost"]["price_mean"]+coefficients[category][consumption]["night_cost"]["another_service"]+coefficients[category][consumption]["night_cost"]["sales_for_control"]+coefficients[category][consumption]["night_cost"]["sales"]+coefficients[category][consumption]["night_cost"]["power_tarif"][power_tarif]
-        day_consumption = 21414
         day_coeff = coefficients[category][consumption]["day_cost"]["price_mean"]+coefficients[category][consumption]["day_cost"]["another_service"]+coefficients[category][consumption]["day_cost"]["sales_for_control"]+coefficients[category][consumption]["day_cost"]["sales"]+coefficients[category][consumption]["day_cost"]["power_tarif"][power_tarif]
         lost = (night_consumption+day_consumption) * coefficients[category][consumption]["compensation"]
         lost_for_day = lost*day_consumption/(night_consumption+day_consumption)
@@ -300,6 +298,26 @@ async def calculate_business_electricity_cost(params: CalculateBusinessRequest):
         broadcast = (day_consumption+night_consumption)*(1-coefficients[category][consumption]["compensation"])
         cost = broadcast+common_lost+night_coeff*night_consumption+day_coeff*day_consumption
         return cost 
+    def category_third(region, cost_of_energy, coefficients, real_average_power, real_volume):
+        region_tariff = next((t for t in business_tariffs if t["region"] == region), None)
+        if not region_tariff:
+            return {"success": False, "error": "Region not found"}
+        category = "third_category_cost"
+        result = 0
+        for i in range(len(real_volume)):
+            result=real_volume[i]*(cost_of_energy+coefficients[category][consumption]["another_service"]+cost_of_energy+coefficients[category][consumption]["sales"]+cost_of_energy+coefficients[category][consumption]["cost_for_onestuff"])
+        return (result+real_average_power*coefficients[category][consumption]["cost_for_power"])
+    
+    def category_four(region, cost_of_energy, coefficients, real_average_power, real_average_power_broadcast, real_volume):
+        region_tariff = next((t for t in business_tariffs if t["region"] == region), None)
+        if not region_tariff:
+            return {"success": False, "error": "Region not found"}
+        category = "third_category_cost"
+        result = 0
+        for i in range(len(real_volume)):
+            result=real_volume[i]*(cost_of_energy+coefficients[category][consumption]["another_service"]+cost_of_energy+coefficients[category][consumption]["sales"]+cost_of_energy+coefficients[category][consumption]["cost_for_onestuff"])
+        return (result+real_average_power*coefficients[category][consumption]["cost_for_power"]+real_average_power_broadcast*coefficients[category][consumption]["broad_cast"])
+        
     return {
         "success": True,
         "data": {
