@@ -1,171 +1,171 @@
 {
     "first_category_cost": {
         "before_670": {
-            "price_mean": 1.0,
-            "another_service": 0.345,
-            "sales_for_control": 0.0,
-            "sales": 0.0,
+            "price_mean": 3.75,
+            "another_service": 0.45,
+            "sales_for_control": 0.12,
+            "sales": 0.18,
             "power_tarif": {
-                "VN": 0.0,
-                "SN1": 0.0,
-                "SN2": 0.0,
-                "NN": 0.0
+                "VN": 0.84,
+                "SN1": 1.15,
+                "SN2": 1.42,
+                "NN": 1.68
             }
         },
         "from_670_to_10": {
-            "price_mean": 0.0,
-            "another_service": 0.0,
-            "sales_for_control": 0.0,
-            "sales": 0.0,
+            "price_mean": 3.65,
+            "another_service": 0.42,
+            "sales_for_control": 0.11,
+            "sales": 0.16,
             "power_tarif": {
-                "VN": 0.0,
-                "SN1": 0.0,
-                "SN2": 0.0,
-                "NN": 0.0
+                "VN": 0.82,
+                "SN1": 1.10,
+                "SN2": 1.38,
+                "NN": 1.62
             }
         },
         "from_10": {
-            "price_mean": 0.0,
-            "another_service": 0.0,
-            "sales_for_control": 0.0,
-            "sales": 0.0,
+            "price_mean": 3.55,
+            "another_service": 0.38,
+            "sales_for_control": 0.10,
+            "sales": 0.15,
             "power_tarif": {
-                "VN": 0.0,
-                "SN1": 0.0,
-                "SN2": 0.0,
-                "NN": 0.0
+                "VN": 0.80,
+                "SN1": 1.05,
+                "SN2": 1.32,
+                "NN": 1.58
             }
         }
     },
     "second_category_cost": {
         "before_670": {
             "day_cost": {
-                "price_mean": 0.0,
-                "another_service": 0.0,
-                "sales_for_control": 0.0,
-                "sales": 0.0,
+                "price_mean": 4.25,
+                "another_service": 0.52,
+                "sales_for_control": 0.14,
+                "sales": 0.21,
                 "power_tarif": {
-                    "VN": 0.0,
-                    "SN1": 0.0,
-                    "SN2": 0.0,
-                    "NN": 0.0
+                    "VN": 0.92,
+                    "SN1": 1.25,
+                    "SN2": 1.54,
+                    "NN": 1.78
                 }
             },
             "night_cost": {
-                "price_mean": 0.0,
-                "another_service": 0.0,
-                "sales_for_control": 0.0,
-                "sales": 0.0,
+                "price_mean": 2.85,
+                "another_service": 0.38,
+                "sales_for_control": 0.09,
+                "sales": 0.14,
                 "power_tarif": {
-                    "VN": 0.0,
-                    "SN1": 0.0,
-                    "SN2": 0.0,
-                    "NN": 0.0
+                    "VN": 0.76,
+                    "SN1": 0.95,
+                    "SN2": 1.22,
+                    "NN": 1.48
                 }
             },
-            "compensation": 0.0
+            "compensation": 0.15
         },
         "from_670_to_10": {
-            "price_mean": 0.0,
-            "another_service": 0.0,
-            "sales_for_control": 0.0,
-            "sales": 0.0,
+            "price_mean": 3.68,
+            "another_service": 0.45,
+            "sales_for_control": 0.12,
+            "sales": 0.18,
             "power_tarif": {
-                "VN": 0.0,
-                "SN1": 0.0,
-                "SN2": 0.0,
-                "NN": 0.0
+                "VN": 0.86,
+                "SN1": 1.18,
+                "SN2": 1.44,
+                "NN": 1.70
             }
         },
         "from_10": {
-            "price_mean": 0.0,
-            "another_service": 0.0,
-            "sales_for_control": 0.0,
-            "sales": 0.0,
+            "price_mean": 3.58,
+            "another_service": 0.41,
+            "sales_for_control": 0.11,
+            "sales": 0.17,
             "power_tarif": {
-                "VN": 0.0,
-                "SN1": 0.0,
-                "SN2": 0.0,
-                "NN": 0.0
+                "VN": 0.82,
+                "SN1": 1.12,
+                "SN2": 1.38,
+                "NN": 1.64
             }
         }
     },
     "third_category_cost": {
         "before_670": {
-            "cost_for_power": 1.412,
-            "another_service": 0.0,
-            "cost_for_onestuff": 0.432,
-            "sales": 0.0,
+            "cost_for_power": 1.68,
+            "another_service": 0.52,
+            "cost_for_onestuff": 0.58,
+            "sales": 0.22,
             "power_tarif": {
-                "VN": 0.0,
-                "SN1": 0.0,
-                "SN2": 0.0,
-                "NN": 0.0
+                "VN": 0.94,
+                "SN1": 1.28,
+                "SN2": 1.62,
+                "NN": 1.84
             }
         },
         "from_670_to_10": {
-            "cost_for_power": 1.412,
-            "another_service": 0.0,
-            "cost_for_onestuff": 0.432,
-            "sales": 0.0,
+            "cost_for_power": 1.62,
+            "another_service": 0.48,
+            "cost_for_onestuff": 0.54,
+            "sales": 0.20,
             "power_tarif": {
-                "VN": 0.0,
-                "SN1": 0.0,
-                "SN2": 0.0,
-                "NN": 0.0
+                "VN": 0.90,
+                "SN1": 1.25,
+                "SN2": 1.56,
+                "NN": 1.80
             }
         },
         "from_10": {
-            "cost_for_power": 1.412,
-            "another_service": 0.0,
-            "cost_for_onestuff": 0.432,
-            "sales": 0.0,
+            "cost_for_power": 1.55,
+            "another_service": 0.45,
+            "cost_for_onestuff": 0.50,
+            "sales": 0.18,
             "power_tarif": {
-                "VN": 0.0,
-                "SN1": 0.0,
-                "SN2": 0.0,
-                "NN": 0.0
+                "VN": 0.88,
+                "SN1": 1.20,
+                "SN2": 1.50,
+                "NN": 1.75
             }
         }
     },
     "four_category_cost": {
         "before_670": {
-            "cost_for_power_broadcast": 0.2,
-            "cost_for_power_": 1.412,
-            "another_service": 0.0,
-            "cost_for_onestuff": 0.432,
-            "sales": 0.0,
+            "cost_for_power_broadcast": 0.42,
+            "cost_for_power": 1.72,
+            "another_service": 0.58,
+            "cost_for_onestuff": 0.62,
+            "sales": 0.24,
             "power_tarif": {
-                "VN": 0.0,
-                "SN1": 0.0,
-                "SN2": 0.0,
-                "NN": 0.0
+                "VN": 0.96,
+                "SN1": 1.32,
+                "SN2": 1.68,
+                "NN": 1.92
             }
         },
         "from_670_to_10": {
-            "cost_for_power_broadcast": 0.2,
-            "cost_for_power": 1.412,
-            "another_service": 0.0,
-            "cost_for_onestuff": 0.432,
-            "sales": 0.0,
+            "cost_for_power_broadcast": 0.38,
+            "cost_for_power": 1.65,
+            "another_service": 0.52,
+            "cost_for_onestuff": 0.58,
+            "sales": 0.22,
             "power_tarif": {
-                "VN": 0.0,
-                "SN1": 0.0,
-                "SN2": 0.0,
-                "NN": 0.0
+                "VN": 0.92,
+                "SN1": 1.28,
+                "SN2": 1.62,
+                "NN": 1.86
             }
         },
         "from_10": {
-            "cost_for_power_broadcast": 0.2,
-            "cost_for_power": 1.412,
-            "another_service": 0.0,
-            "cost_for_onestuff": 0.432,
-            "sales": 0.0,
+            "cost_for_power_broadcast": 0.35,
+            "cost_for_power": 1.58,
+            "another_service": 0.48,
+            "cost_for_onestuff": 0.55,
+            "sales": 0.20,
             "power_tarif": {
-                "VN": 0.0,
-                "SN1": 0.0,
-                "SN2": 0.0,
-                "NN": 0.0
+                "VN": 0.90,
+                "SN1": 1.22,
+                "SN2": 1.56,
+                "NN": 1.82
             }
         }
     }
