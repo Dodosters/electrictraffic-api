@@ -77,33 +77,163 @@ class CategoryCoefficients(BaseModel):
     from_670_to_10: CoefficientRange
     from_10: CoefficientRange
 
+# Модели для второй категории
+class DayCost(BaseModel):
+    price_mean: float
+    another_service: float
+    sales_for_control: float
+    sales: float
+    power_tarif: PowerTariff
+
+class NightCost(BaseModel):
+    price_mean: float
+    another_service: float
+    sales_for_control: float
+    sales: float
+    power_tarif: PowerTariff
+
+class SecondCategoryBefore670(BaseModel):
+    day_cost: DayCost
+    night_cost: NightCost
+    compensation: float
+
+class SecondCategoryRange(BaseModel):
+    price_mean: float
+    another_service: float
+    sales_for_control: float
+    sales: float
+    power_tarif: PowerTariff
+
+class SecondCategoryCoefficients(BaseModel):
+    before_670: SecondCategoryBefore670
+    from_670_to_10: SecondCategoryRange
+    from_10: SecondCategoryRange
+
+# Модели для третьей категории
+class ThirdCategoryRange(BaseModel):
+    cost_for_power: float
+    another_service: float
+    cost_for_onestuff: float
+    sales: float
+    power_tarif: PowerTariff
+
+class ThirdCategoryCoefficients(BaseModel):
+    before_670: ThirdCategoryRange
+    from_670_to_10: ThirdCategoryRange
+    from_10: ThirdCategoryRange
+
+# Модели для четвертой категории
+class FourthCategoryRange(BaseModel):
+    cost_for_power_broadcast: float
+    cost_for_power: float
+    another_service: float
+    cost_for_onestuff: float
+    sales: float
+    power_tarif: PowerTariff
+
+class FourthCategoryCoefficients(BaseModel):
+    before_670: FourthCategoryRange
+    from_670_to_10: FourthCategoryRange
+    from_10: FourthCategoryRange
+
 class AllCoefficients(BaseModel):
     first_category_cost: CategoryCoefficients
+    second_category_cost: SecondCategoryCoefficients
+    third_category_cost: ThirdCategoryCoefficients
+    four_category_cost: FourthCategoryCoefficients
 
-def save_coefficients(coeffs: AllCoefficients):
+def save_coefficients(coeffs: dict):
     with open(coefficients_file, "w") as f: 
-        json.dump(coeffs.dict(), f, indent=4, ensure_ascii=False)
+        json.dump(coeffs, f, indent=4, ensure_ascii=False)
 
 def load_coefficients() -> dict:
     with open(coefficients_file, "r") as f:  
         data = json.load(f)
     return data
 
-@app.get("/coefficients", response_model=AllCoefficients)
+@app.get("/coefficients")
 async def get_all_coefficients():
     return load_coefficients()
+
+# Эндпоинты для первой категории
+@app.get("/coefficients/first_category")
+async def get_first_category():
+    all_coeffs = load_coefficients()
+    return all_coeffs["first_category_cost"]
 
 @app.put("/coefficients/first_category")
 async def update_first_category(new_coefficients: CategoryCoefficients):
     all_coeffs = load_coefficients()
-    all_coeffs.first_category_cost = new_coefficients
+    all_coeffs["first_category_cost"] = new_coefficients.dict()
     save_coefficients(all_coeffs)
     return {"message": "Коэффициенты первой категории обновлены"}
 
-@app.get("/coefficients/first_category/{range_name}", response_model=CoefficientRange)
-async def get_specific_range(range_name: str):
+@app.get("/coefficients/first_category/{range_name}")
+async def get_first_category_range(range_name: str):
     coeffs = load_coefficients()
-    return getattr(coeffs.first_category_cost, range_name)
+    if range_name not in coeffs["first_category_cost"]:
+        raise HTTPException(status_code=404, detail=f"Диапазон {range_name} не найден")
+    return coeffs["first_category_cost"][range_name]
+
+# Эндпоинты для второй категории
+@app.get("/coefficients/second_category")
+async def get_second_category():
+    all_coeffs = load_coefficients()
+    return all_coeffs["second_category_cost"]
+
+@app.put("/coefficients/second_category")
+async def update_second_category(new_coefficients: SecondCategoryCoefficients):
+    all_coeffs = load_coefficients()
+    all_coeffs["second_category_cost"] = new_coefficients.dict()
+    save_coefficients(all_coeffs)
+    return {"message": "Коэффициенты второй категории обновлены"}
+
+@app.get("/coefficients/second_category/{range_name}")
+async def get_second_category_range(range_name: str):
+    coeffs = load_coefficients()
+    if range_name not in coeffs["second_category_cost"]:
+        raise HTTPException(status_code=404, detail=f"Диапазон {range_name} не найден")
+    return coeffs["second_category_cost"][range_name]
+
+# Эндпоинты для третьей категории
+@app.get("/coefficients/third_category")
+async def get_third_category():
+    all_coeffs = load_coefficients()
+    return all_coeffs["third_category_cost"]
+
+@app.put("/coefficients/third_category")
+async def update_third_category(new_coefficients: ThirdCategoryCoefficients):
+    all_coeffs = load_coefficients()
+    all_coeffs["third_category_cost"] = new_coefficients.dict()
+    save_coefficients(all_coeffs)
+    return {"message": "Коэффициенты третьей категории обновлены"}
+
+@app.get("/coefficients/third_category/{range_name}")
+async def get_third_category_range(range_name: str):
+    coeffs = load_coefficients()
+    if range_name not in coeffs["third_category_cost"]:
+        raise HTTPException(status_code=404, detail=f"Диапазон {range_name} не найден")
+    return coeffs["third_category_cost"][range_name]
+
+# Эндпоинты для четвертой категории
+@app.get("/coefficients/four_category")
+async def get_fourth_category():
+    all_coeffs = load_coefficients()
+    return all_coeffs["four_category_cost"]
+
+@app.put("/coefficients/four_category")
+async def update_fourth_category(new_coefficients: FourthCategoryCoefficients):
+    all_coeffs = load_coefficients()
+    all_coeffs["four_category_cost"] = new_coefficients.dict()
+    save_coefficients(all_coeffs)
+    return {"message": "Коэффициенты четвертой категории обновлены"}
+
+@app.get("/coefficients/four_category/{range_name}")
+async def get_fourth_category_range(range_name: str):
+    coeffs = load_coefficients()
+    if range_name not in coeffs["four_category_cost"]:
+        raise HTTPException(status_code=404, detail=f"Диапазон {range_name} не найден")
+    return coeffs["four_category_cost"][range_name]
 
 def analyse_excel(file_content):
     
