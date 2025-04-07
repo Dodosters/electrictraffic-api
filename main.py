@@ -157,12 +157,12 @@ def load_coefficients() -> dict:
         data = json.load(f)
     return data
 
-@app.get("/coefficients")
+@app.get("/get_coefficients")
 async def get_all_coefficients():
     return load_coefficients()
 
 # Эндпоинты для первой категории
-@app.get("/coefficients/first_category")
+@app.get("/get_coefficients/first_category")
 async def get_first_category():
     all_coeffs = load_coefficients()
     return all_coeffs["first_category_cost"]
@@ -174,7 +174,7 @@ async def update_first_category(new_coefficients: CategoryCoefficients):
     save_coefficients(all_coeffs)
     return {"message": "Коэффициенты первой категории обновлены"}
 
-@app.get("/coefficients/first_category/{range_name}")
+@app.get("/get_coefficients/first_category/{range_name}")
 async def get_first_category_range(range_name: str):
     coeffs = load_coefficients()
     if range_name not in coeffs["first_category_cost"]:
@@ -182,7 +182,7 @@ async def get_first_category_range(range_name: str):
     return coeffs["first_category_cost"][range_name]
 
 # Эндпоинты для второй категории
-@app.get("/coefficients/second_category")
+@app.get("/get_coefficients/second_category")
 async def get_second_category():
     all_coeffs = load_coefficients()
     return all_coeffs["second_category_cost"]
@@ -194,7 +194,7 @@ async def update_second_category(new_coefficients: SecondCategoryCoefficients):
     save_coefficients(all_coeffs)
     return {"message": "Коэффициенты второй категории обновлены"}
 
-@app.get("/coefficients/second_category/{range_name}")
+@app.get("/get_coefficients/second_category/{range_name}")
 async def get_second_category_range(range_name: str):
     coeffs = load_coefficients()
     if range_name not in coeffs["second_category_cost"]:
@@ -202,7 +202,7 @@ async def get_second_category_range(range_name: str):
     return coeffs["second_category_cost"][range_name]
 
 # Эндпоинты для третьей категории
-@app.get("/coefficients/third_category")
+@app.get("/get_coefficients/third_category")
 async def get_third_category():
     all_coeffs = load_coefficients()
     return all_coeffs["third_category_cost"]
@@ -214,7 +214,7 @@ async def update_third_category(new_coefficients: ThirdCategoryCoefficients):
     save_coefficients(all_coeffs)
     return {"message": "Коэффициенты третьей категории обновлены"}
 
-@app.get("/coefficients/third_category/{range_name}")
+@app.get("/get_coefficients/third_category/{range_name}")
 async def get_third_category_range(range_name: str):
     coeffs = load_coefficients()
     if range_name not in coeffs["third_category_cost"]:
@@ -222,7 +222,7 @@ async def get_third_category_range(range_name: str):
     return coeffs["third_category_cost"][range_name]
 
 # Эндпоинты для четвертой категории
-@app.get("/coefficients/four_category")
+@app.get("/get_coefficients/four_category")
 async def get_fourth_category():
     all_coeffs = load_coefficients()
     return all_coeffs["four_category_cost"]
@@ -234,7 +234,7 @@ async def update_fourth_category(new_coefficients: FourthCategoryCoefficients):
     save_coefficients(all_coeffs)
     return {"message": "Коэффициенты четвертой категории обновлены"}
 
-@app.get("/coefficients/four_category/{range_name}")
+@app.get("/get_coefficients/four_category/{range_name}")
 async def get_fourth_category_range(range_name: str):
     coeffs = load_coefficients()
     if range_name not in coeffs["four_category_cost"]:
@@ -345,34 +345,34 @@ def excel_to_json(file_content: bytes):
         raise HTTPException(status_code=500, detail=f"Произошла ошибка: {str(e)}")
 
 # API routes
-@app.get("/business-tariffs")
+@app.get("/get_business-tariffs")
 async def get_business_tariffs():
     await delay(500)
     return {"success": True, "data": business_tariffs}
 
-@app.get("/business-tariffs/{region}")
+@app.get("/get_business-tariffs/{region}")
 async def get_business_tariffs_by_region(region: str):
     await delay(500)
     tariffs = [tariff for tariff in business_tariffs if tariff["region"] == region]
     return {"success": True, "data": tariffs}
 
-@app.get("/personal-tariffs")
+@app.get("/get_personal-tariffs")
 async def get_personal_tariffs():
     await delay(500)
     return {"success": True, "data": personal_tariffs}
 
-@app.get("/personal-tariffs/{region}")
+@app.get("/get_personal-tariffs/{region}")
 async def get_personal_tariffs_by_region(region: str):
     await delay(500)
     tariffs = [tariff for tariff in personal_tariffs if tariff["region"] == region]
     return {"success": True, "data": tariffs}
 
-@app.get("/providers")
+@app.get("/get_providers")
 async def get_providers():
     await delay(500)
     return {"success": True, "data": providers}
 
-@app.get("/providers/{id}")
+@app.get("/get_providers/{id}")
 async def get_provider_by_id(id: int):
     await delay(500)
     provider = next((p for p in providers if p["id"] == id), None)
@@ -380,12 +380,12 @@ async def get_provider_by_id(id: int):
         return {"success": True, "data": provider}
     return {"success": False, "error": "Provider not found"}
 
-@app.get("/analytics")
+@app.get("/get_analytics")
 async def get_analytics_data():
     await delay(700)
     return {"success": True, "data": analytics_data}
 
-@app.post("/calculate/business")
+@app.post("/get_calculate/business")
 async def calculate_business_electricity_cost(params: CalculateBusinessRequest):
     await delay(600)
     region = params.region
@@ -837,17 +837,17 @@ async def process_excel(file: UploadFile = File(...)):
         raise HTTPException(status_code=500, detail=f"Ошибка при обработке файла: {str(e)}")
 
 
-@app.get("/faqs")
+@app.get("/get_faqs")
 async def get_faqs():
     await delay(400)
     return {"success": True, "data": faq_data}
 
-@app.get("/news")
+@app.get("/get_news")
 async def get_news():
     await delay(400)
     return {"success": True, "data": news_data}
 
-@app.get("/news/{id}")
+@app.get("/get_news/{id}")
 async def get_news_by_id(id: int):
     await delay(300)
     news = next((n for n in news_data if n["id"] == id), None)
