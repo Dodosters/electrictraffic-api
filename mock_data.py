@@ -1,4 +1,3 @@
-# Mock data for Etariff API
 
 # Business tariffs data
 business_tariffs = [

@@ -26,7 +26,7 @@ from mock_data import (
 from prediction_api import *
 
 app = FastAPI(
-    title="ETariff API",
+    title="ТНС-энерго API",
     description="API для доступа к данным о тарифах на электроэнергию в Ростовской области",
     version="1.0.0"
 )
